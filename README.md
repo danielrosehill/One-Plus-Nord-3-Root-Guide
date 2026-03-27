@@ -133,14 +133,65 @@ See [scripts/debloat.sh](scripts/debloat.sh) — removes ~80 ColorOS/HeyTap/Oplu
 
 Note: The Nord 3 does **not** have an IR blaster — remove IR Hub if present.
 
+## Anti-Rollback Warning (OxygenOS 16.0.3.500+)
+
+> **WARNING**: OnePlus has implemented hardware-level anti-rollback (ARB) protection starting with OxygenOS 16.0.3.500. This is **irreversible** — updating to this version permanently prevents downgrading to any earlier firmware.
+
+### What Happens
+
+- An e-fuse on the motherboard is blown when you boot into 16.0.3.500+, incrementing a hardware security counter
+- The bootloader will **refuse to boot** any firmware with a lower rollback index
+- **EDL mode cannot fix this** — the check happens at the hardware level
+- The only way to reset it is replacing the motherboard (similar to Samsung Knox)
+
+### Impact on Rooted Users
+
+- **You cannot flash older boot images** — only boot.img from 16.0.3.500 or newer will work
+- **Custom ROMs built on older firmware bases may hard-brick your device**
+- **If you lose your stock ROM for 16.0.3.500, recovery options are severely limited**
+- Further OTA updates may increment the rollback index again, narrowing your options more
+
+### What You Must Do
+
+1. **Archive the full stock ROM** for your current firmware version — OnePlus uses time-limited download URLs, so grab it now via Oxygen Updater and keep it permanently
+2. **Back up your boot partition images** (boot, init_boot, vendor_boot, vbmeta) — these are your lifeline:
+   ```bash
+   SLOT=$(adb shell getprop ro.boot.slot_suffix)  # _a or _b
+   for part in boot init_boot vendor_boot vbmeta; do
+     adb shell "su -c 'dd if=/dev/block/by-name/${part}${SLOT} of=/sdcard/${part}.img bs=4096'"
+     adb pull /sdcard/${part}.img ./backup/${part}.img
+     adb shell rm /sdcard/${part}.img
+   done
+   ```
+3. **Block OTA updates** — do not accept further updates without verifying the rollback index impact first
+4. **Never flash firmware older than 16.0.3.500** — this will brick the device
+
+### Checking Your Anti-Rollback Status
+
+```bash
+adb shell "su -c 'getprop ro.boot.vbmeta.avb_version'"   # AVB version
+adb shell "su -c 'getprop ro.boot.vbmeta.device_state'"  # unlocked/locked
+adb shell "su -c 'getprop ro.vendor.efuse_writer_enable'" # 1 = e-fuse active
+```
+
+### References
+
+- [DroidWin: OnePlus Android 16 Anti-Rollback Is Here](https://droidwin.com/oneplus-android-16-anti-rollback-is-here/)
+- [OnePlus Community Discussion](https://community.oneplus.com/thread/2044872820680294409)
+- [OnePlus Anti-Rollback Checker](https://github.com/Bartixxx32/OnePlus-antirollchecker) (does not yet support Nord 3)
+
 ## Updating OxygenOS Later
 
 Don't use the built-in updater. Re-enable OTA if needed (`pm enable com.oplus.ota`), download full OTA via Oxygen Updater, extract and patch new boot.img, flash via fastboot.
 
+**Before updating**: Verify the new version's rollback index. Each increment further restricts which firmware versions you can boot.
+
 ## Rollback
 
+> **With anti-rollback active, re-locking the bootloader is risky.** Only flash boot images from firmware >= 16.0.3.500. Flashing older stock images will brick the device.
+
 ```bash
-fastboot flash boot ~/phone-backup/stock_boot.img   # Remove root
+fastboot flash boot ~/phone-backup/stock_boot.img   # Remove root (must be from 16.0.3.500+)
 fastboot flashing lock                                # Re-lock (another factory reset)
 ```
 
